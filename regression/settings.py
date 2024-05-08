@@ -16,7 +16,7 @@ import yaml
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-with open(BASE_DIR / "configs" / "config.yml") as f:
+with open(BASE_DIR / "configs" / "config.yml", encoding='utf-8') as f:
     config = yaml.safe_load(f)
 
 
@@ -45,6 +45,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'modeling'
 ]
 
 MIDDLEWARE = [
@@ -76,7 +78,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'regression.wsgi.application'
-
+ASGI_APPLICATION = 'regression.asgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
