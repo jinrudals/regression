@@ -25,6 +25,9 @@ class Project(models.Model):
             models.UniqueConstraint(fields=('url',), name='unique__url')
         ]
 
+    def __str__(self) -> str:
+        return f"Project({self.name})"
+
 
 class Group(models.Model):
     project = models.ForeignKey(
@@ -36,6 +39,44 @@ class Group(models.Model):
             models.UniqueConstraint(
                 fields=('project', 'name'), name='unique__group__name__per_project')
         ]
+
+
+class Version(models.Model):
+    project = models.ForeignKey(
+        Project, on_delete=models.CASCADE, related_name='versions')
+    name = models.CharField(max_length=255)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=('project', 'name'), name='unique__version__name__per_project')
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+@receiver(post_save, sender=Version)
+def signal_handler_version(sender, instance: Version, created, **kwargs):
+    if created:
+        testcases = instance.project.testcases.all()
+        passed = testcases.filter(status='passed')
+        failed = testcases.filter(status='failed')
+        unverified = testcases.filter(status__in=['candidate', 'candidate2'])
+
+        with transaction.atomic():
+            for each in passed:
+                each.status = 'candidate2'
+                each.save()
+            for each in failed:
+                each.status = 'candidate'
+                each.save()
+            for each in unverified:
+                if each.recent:
+                    each.recent.delete()
+            Snapshot.objects.get_or_create(
+                version=instance
+            )
 
 
 class Testcase(models.Model):
@@ -87,16 +128,28 @@ class Testcase(models.Model):
                 self.recent = None
         return super().save(force_insert, force_update, using, update_fields)
 
+    def __str__(self) -> str:
+        return f"Testcase({self.key}, {self.project})"
+
 
 @receiver(post_save, sender=Testcase)
 def signal_handler(sender, instance: Testcase, created, **kwargs):
     with transaction.atomic():
-        try:
-            snapshot = Snapshot.objects.filter(
-                project=instance.project,
-            ).order_by('-id').first()
-        except:
-            snapshot = Snapshot.objects.create(project=instance.project)
+        version = instance.project.versions.all().order_by('-id').first()
+        snapshot, _ = Snapshot.objects.get_or_create(
+            version=version,
+            defaults={
+                'date': timezone.now()
+            }
+        )
+        # try:
+        #     snapshot = Snapshot.objects.filter(
+        #         version=version
+        #     ).order_by('-id').first()
+        # except:
+        #     snapshot = Snapshot.objects.create(version=version)
+
+        print("Hello Bugger", snapshot)
         # Mapping of status to Snapshot relation
         status_map = {
             'passed': snapshot.passed,
@@ -121,6 +174,9 @@ def signal_handler(sender, instance: Testcase, created, **kwargs):
 class Trial(models.Model):
     testcase = models.ForeignKey(
         Testcase, on_delete=models.CASCADE, related_name='trials')
+    version = models.ForeignKey(
+        Version, on_delete=models.CASCADE
+    )
     directory = models.TextField(null=False, blank=False)
     _STATUS = (
         ('compiling', 'compiling'),
@@ -150,8 +206,8 @@ class Trial(models.Model):
 
 
 class Snapshot(models.Model):
-    project = models.ForeignKey(
-        Project, on_delete=models.CASCADE, related_name='snapshots')
+    version = models.ForeignKey(
+        Version, on_delete=models.CASCADE, related_name='snapshots')
     date = models.DateField(auto_now_add=True)
     passed = models.ManyToManyField(
         'Testcase', blank=True, related_name='passed_snapshots')
@@ -163,7 +219,7 @@ class Snapshot(models.Model):
         'Testcase', blank=True, related_name='unverified_snapshots')
 
     def __str__(self) -> str:
-        return f"Snashot({self.project}, {self.date})"
+        return f"Snashot({self.version.project},{self.version},{self.date})"
 
     @property
     def total(self):
@@ -188,9 +244,15 @@ class Snapshot(models.Model):
                 self.setup_testcase_relations()
 
     def setup_testcase_relations(self):
-        testcases = self.project.testcases.all()
+        testcases = self.version.project.testcases.all()
         self.passed.set(testcases.filter(status='passed'))
         self.failed.set(testcases.filter(status='failed'))
         self.unverified.set(testcases.filter(
             status__in=['candidate', 'candidate2']))
         self.todo.set(testcases.filter(status='todo'))
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=('version', 'date'), name='unique__snapshot__per_date')
+        ]
