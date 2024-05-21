@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/5.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
+import asyncio
 from pathlib import Path
 import yaml
 
@@ -77,7 +78,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'regression.wsgi.application'
+# WSGI_APPLICATION = 'regression.wsgi.application'
 ASGI_APPLICATION = 'regression.asgi.application'
 
 # Database
@@ -147,4 +148,15 @@ CHANNEL_LAYERS = {
             "hosts": [("localhost", 6379)]
         }
     }
+}
+
+LOOP = asyncio.new_event_loop()
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
 }
