@@ -1,14 +1,22 @@
+from django.conf import settings
+import asyncio
+from . import models
+from regression.ws import Websocket
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from typing import Iterable
 from django.db import models
 from django.contrib.auth import get_user_model
-from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.db import transaction
 from django.utils import timezone
+import json
+import logging
 
 # Create your models here.
+logger = logging.getLogger(__name__)
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 class Project(models.Model):
@@ -193,16 +201,109 @@ class Trial(models.Model):
     backup = models.TextField(null=True, blank=True)
 
     BUILD_NUMBER = models.IntegerField(null=True, blank=True)
+    workspace = models.ForeignKey(
+        'Workspace', on_delete=models.SET_NULL, blank=True, null=True, related_name='trials')
 
     def save(self, force_insert: bool = False, force_update: bool = False, using: str | None = None, update_fields: Iterable[str] | None = None) -> None:
         if not self.pk:
-            super().save(force_insert, force_update, using, update_fields)
-            self.testcase.recent = self
+            instance = super().save(force_insert, force_update, using, update_fields)
+            self.testcase.recent = instance
             self.testcase.save()
+            return instance
         if self.status in ['failed', 'passed']:
             self.testcase.status = self.status
             self.testcase.save()
         return super().save(force_insert, force_update, using, update_fields)
+
+
+@receiver(post_save, sender=Trial)
+def signal_handler_trial(sender, instance: Trial, created, **kwargs):
+    if instance.status in ['passed', 'failed']:
+        workspace = instance.workspace
+        if not workspace:
+            return
+        # Flag 1
+        trials = workspace.trials.all().filter(
+            status__in=['pending', 'compiling', 'running'])
+
+        if not workspace.stubs:
+            pass
+        # Flag 2
+        # Stub.objects.filter(workspace=workspace)
+        if not trials.exist() and not workspace.stubs:
+            # Delete Workspace
+            pass
+    pass
+
+
+@receiver(post_save, sender=Trial)
+def handle_trial_on_pending(sender, instance: Trial, created, **kwargs):
+    if instance.status == "pending":
+        logger.debug(f"Trial({instance.pk}) has been pended")
+        loop = settings.LOOP
+        loop.create_task(
+            send_message(json.dumps(
+                {
+                    "action": "add",
+                    "owner": instance.testcase.owner.email,
+                    "project": instance.testcase.project.pk,
+                    "command": instance.testcase.command,
+                    "build": instance.BUILD_NUMBER,
+                    "pk": instance.pk
+                }
+            ))
+        )
+
+
+async def send_message(message):
+    print("Send message to the backend")
+    if Websocket.instance == None:
+        await Websocket.create()
+    await Websocket().connection.send(str(message))
+    print("Message is sent")
+
+
+@receiver(post_save, sender=Trial)
+def handle_trial_on_passed_failed(sender, instance: Trial, created, **kwargs):
+    if instance.status in ['passed', 'failed']:
+        loop = settings.LOOP
+        loop.create_task(
+            send_message(json.dumps({
+                "action": "complete",
+                "project": instance.testcase.project.pk,
+                "command": instance.testcase.command,
+                "build": instance.BUILD_NUMBER
+            })))
+
+
+class Stub(models.Model):
+    project = models.ForeignKey(
+        Project, on_delete=models.CASCADE, related_name='stubs')
+    name = models.CharField(max_length=255)
+    workspace = models.ForeignKey(
+        'Workspace', null=True, blank=True, on_delete=models.SET_NULL
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=('project', 'name'), name='unique__stub')
+        ]
+
+
+class Workspace(models.Model):
+    '''
+    Compile Workspace
+    '''
+    path = models.TextField(null=False, blank=False, unique=True)
+
+    def try_delete_workspace(self):
+        trials = self.trials.all().filter(
+            status__in=['compiling', 'pending', 'running'])
+        stubs = self.stubs
+
+        if not trials.exist and not stubs:
+            self.delete()
 
 
 class Snapshot(models.Model):
