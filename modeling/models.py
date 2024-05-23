@@ -10,13 +10,12 @@ from django.contrib.auth import get_user_model
 from django.dispatch import receiver
 from django.db import transaction
 from django.utils import timezone
+
 import json
 import logging
 
 # Create your models here.
 logger = logging.getLogger(__name__)
-
-logging.basicConfig(level=logging.DEBUG)
 
 
 class Project(models.Model):
@@ -129,10 +128,11 @@ class Testcase(models.Model):
         if self.pk:  # if it existed
             obj = Testcase.objects.get(pk=self.pk)
             if self.command != obj.command or self.timeout != obj.timeout:
+                logger.debug(
+                    f"Command or Timeout has been changed for {self.pk}")
                 self.status = 'candidate'
             if self.status in ['candidate', 'candidate2'] and obj.status in ['passed', 'failed']:
-                # if the previous status in passed / failed and current status is candidate
-                # clean the latest trial
+                logger.debug(f"Clean Recent Value for {self.pk}")
                 self.recent = None
         return super().save(force_insert, force_update, using, update_fields)
 
@@ -150,14 +150,7 @@ def signal_handler(sender, instance: Testcase, created, **kwargs):
                 'date': timezone.now()
             }
         )
-        # try:
-        #     snapshot = Snapshot.objects.filter(
-        #         version=version
-        #     ).order_by('-id').first()
-        # except:
-        #     snapshot = Snapshot.objects.create(version=version)
 
-        print("Hello Bugger", snapshot)
         # Mapping of status to Snapshot relation
         status_map = {
             'passed': snapshot.passed,
@@ -207,7 +200,9 @@ class Trial(models.Model):
     def save(self, force_insert: bool = False, force_update: bool = False, using: str | None = None, update_fields: Iterable[str] | None = None) -> None:
         if not self.pk:
             instance = super().save(force_insert, force_update, using, update_fields)
-            self.testcase.recent = instance
+            logger.debug(
+                f"Set Trial({self.pk}) as recent of TestCase({self.testcase.pk})")
+            self.testcase.recent = self
             self.testcase.save()
             return instance
         if self.status in ['failed', 'passed']:
@@ -255,12 +250,38 @@ def handle_trial_on_pending(sender, instance: Trial, created, **kwargs):
         )
 
 
+# @receiver(post_save, sender=Trial)
+# def handle_trial_on_running(sender, instance: Trial, created, **kwargs):
+#     if instance.status == "running":
+#         loop = settings.LOOP
+#         loop.create_task(send_message_to_jenkins(instance))
+#         pass
+
+
+# async def send_message_to_jenkins(instance: Trial):
+#     from .serializers import Trial as ser
+#     channel = get_channel_layer()
+#     project = instance.testcase.project.pk
+#     build = instance.BUILD_NUMBER
+
+#     serializer = await sync_to_async(ser)(instance)
+
+#     logger.debug(f"Serialized data is {serializer}")
+#     await channel.group_send(
+#         f'{project}_{build}',
+#         {
+#             'type': f'messaging',
+#             "message": json.dumps(serializer.data)
+#         }
+#     )
+
+
 async def send_message(message):
-    print("Send message to the backend")
+    logger.debug("Send Message to task Manager")
     if Websocket.instance == None:
         await Websocket.create()
     await Websocket().connection.send(str(message))
-    print("Message is sent")
+    logger.info(f"Message is sent to TM: {message}")
 
 
 @receiver(post_save, sender=Trial)

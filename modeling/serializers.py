@@ -1,4 +1,4 @@
-from rest_framework.serializers import ModelSerializer
+from rest_framework.serializers import ModelSerializer, CharField, EmailField, IntegerField
 from rest_framework.utils import model_meta
 from django.db import transaction
 
@@ -24,6 +24,12 @@ class Testcase(ModelSerializer):
 
 
 class Trial(ModelSerializer):
+    command = CharField(source="testcase.command", read_only=True)
+    recent = IntegerField(source="testcase.recent.pk", read_only=True)
+    owner = EmailField(source="testcase.owner.email", read_only=True)
+
+    project = IntegerField(source='testcase.project.pk', read_only=True)
+
     class Meta:
         model = models.Trial
         fields = '__all__'

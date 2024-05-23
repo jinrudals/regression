@@ -38,6 +38,7 @@ class Testcase(Base):
 
 
 class Trial(Base):
+    partial = True
     pass
 
 

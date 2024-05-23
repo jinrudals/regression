@@ -47,7 +47,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'modeling'
+    'modeling',
+    'jenkins',
 ]
 
 MIDDLEWARE = [
@@ -158,5 +159,61 @@ CHANNEL_LAYERS = {
         "CONFIG": {
             "hosts": [("127.0.0.1", 6379)],
         },
+    },
+}
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': True,
+    'formatters': {
+        'verbose': {
+            'format': '[%(levelname)s][%(name)s  %(lineno)d %(funcName)s] %(message)s ',
+        },
+        'simple': {
+            'format': '[%(levelname)s][%(name)s  %(lineno)d %(funcName)s] %(message)s ',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'debug.log',
+            'formatter': 'verbose'
+        },
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple'
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file', 'console'],
+            'level': 'WARN',
+            'propagate': False,
+        },
+        'modeling': {  # replace 'myapp' with your app's name
+            'handlers': ['file', 'console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        "daphne": {
+            "handlers": ["file"],
+            "level": "DEBUG",
+            "propagate": False
+        },
+        "regression": {
+            "handlers": ["file", "console"],
+            "propagate": False
+        },
+        "jenkins": {
+            "handlers": ["file", "console"],
+            "propagate": False
+        },
+        "websockets.client": {
+            "handlers": ["file"],
+            "level": "NOTSET",
+            "propagate": False
+        }
     },
 }

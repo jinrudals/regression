@@ -1,5 +1,6 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -15,3 +16,8 @@ class Consumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, code):
         await self.channel_layer.group_discard(self.room_name, self.channel_name)
+
+    async def messaging(self, event):
+        message = event.get('message')
+
+        await self.send(text_data=message)

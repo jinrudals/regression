@@ -4,9 +4,10 @@ import websockets.client
 import asyncio
 import json
 import logging
+from channels.layers import get_channel_layer
+from asgiref.sync import sync_to_async
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
 
 
 class Websocket:
@@ -17,7 +18,7 @@ class Websocket:
             instance = super().__new__(cls)
             cls.instance = instance
             logger.debug("Creating Websocket instance")
-        print("Get Websocket instance")
+        logger.info("Get Websocket Instacne")
         return cls.instance
 
     @classmethod
@@ -30,14 +31,36 @@ class Websocket:
         return instance
 
     async def start_listening(self):
-        async for message in self.connection:
-            await self.handle_message(message)
+        try:
+            async for message in self.connection:
+                await self.handle_message(message)
+        except:
+            self.create()
 
     async def handle_message(self, message):
         from modeling.models import Trial
+        from modeling.serializers import Trial as ter
         msg = json.loads(message)
-        print(f"Received message: {message}")
+        logger.info(f"Received message: {message}")
         item = await Trial.objects.aget(pk=msg.get("pk"))
         item.status = "running"
+
         await item.asave()
-        # Add your message handling logic here
+
+        logger.debug(f"Item({item.pk}) has been running status")
+        channel = get_channel_layer()
+
+        ser = await sync_to_async(ter)(item)
+        data = await sync_to_async(lambda: ser.data)()
+
+        project = data.get('project')
+        build = data.get('BUILD_NUMBER')
+        logger.debug(f"Item({item.pk}) has been serialized")
+        await channel.group_send(
+            f'{project}_{build}',
+            {
+                'type': f"messaging",
+                "message": json.dumps(data)
+            }
+        )
+        logger.debug(f"Item({item.pk}) has been passed to jenkins")
