@@ -25,7 +25,7 @@ class Websocket:
     async def create(cls):
 
         instance = cls()
-        instance.connection = await websockets.client.connect("ws://localhost:8023/backend1")
+        instance.connection = await websockets.client.connect("ws://192.128.1.100:8023/backend1")
 
         await asyncio.ensure_future(instance.start_listening())
         return instance

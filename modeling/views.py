@@ -46,6 +46,10 @@ class Snapshot(Base):
     pass
 
 
+class Version(Base):
+    pass
+
+
 class Temp(APIView):
     def get(self, request):
         project = models.Project.objects.first()

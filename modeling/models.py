@@ -225,7 +225,7 @@ def signal_handler_trial(sender, instance: Trial, created, **kwargs):
             pass
         # Flag 2
         # Stub.objects.filter(workspace=workspace)
-        if not trials.exist() and not workspace.stubs:
+        if not trials.exists() and not workspace.stubs:
             # Delete Workspace
             pass
     pass
@@ -302,7 +302,7 @@ class Stub(models.Model):
         Project, on_delete=models.CASCADE, related_name='stubs')
     name = models.CharField(max_length=255)
     workspace = models.ForeignKey(
-        'Workspace', null=True, blank=True, on_delete=models.SET_NULL
+        'Workspace', null=True, blank=True, on_delete=models.SET_NULL, related_name="stubs"
     )
 
     class Meta:

@@ -86,26 +86,38 @@ class PostWorkspace(APIView):
     def post(self, requset: HttpRequest):
         message: dict = requset.data
         path = message.get('path')
-        workspace = Workspace.objects.create(path)
 
+        logger.debug(f"{path} has been received")
+        workspace, _ = Workspace.objects.get_or_create(defaults={
+            "path": path
+        })
+
+        logger.info(f"Workspace({workspace.pk}) has been created")
         stub = message.get('stub')
         project = message.get('project')
 
-        stub = models.Stub.objects.get_or_create(
+        stub, _ = models.Stub.objects.get_or_create(
             project=models.Project.objects.get(pk=project),
+            name=stub,
             defaults={
-                "stub": stub,
                 "workspace": workspace
             }
         )
 
+        logger.info(
+            f"Stub({stub.pk}) has been updated to use Workspace({workspace.pk})")
+
         build_number = message.get('BUILD_NUMBER')
+
         trials = Trial.objects.filter(
             BUILD_NUMBER=build_number,
-            testcase__project=models.Project.objects.get(pk=project)
+            testcase__project=models.Project.objects.get(pk=project),
+            testcase__command__startswith=stub.name
         )
 
+        logger.debug(f"{len(trials)} Trials are found")
         trials.update(workspace=workspace)
+        logger.debug(f"{len(trials)} Trials are now using {workspace.pk}")
 
         serializer = ser.Trial(trials, many=True)
         return Response(serializer.data, status=status.HTTP_201_CREATED)

@@ -11,6 +11,12 @@ class Project(ModelSerializer):
         fields = '__all__'
 
 
+class Version(ModelSerializer):
+    class Meta:
+        model = models.Version
+        fields = "__all__"
+
+
 class Group(ModelSerializer):
     class Meta:
         model = models.Group
