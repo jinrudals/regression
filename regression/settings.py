@@ -12,8 +12,9 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 import asyncio
 from pathlib import Path
 import yaml
+import sys
 
-
+module = sys.modules[__name__]
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -28,12 +29,9 @@ with open(BASE_DIR / "configs" / "config.yml", encoding='utf-8') as f:
 SECRET_KEY = 'django-insecure-7_(ddc*$^lul473^!0toqnr*0r185o%bmz!i_grz1@8w7j*s(n'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config.get('DEBUG', True)
+DEBUG = True
 
 ALLOWED_HOSTS = []
-if config.get('ALLOWED_HOSTS'):
-    ALLOWED_HOSTS = list(filter(lambda x: isinstance(
-        x, str), config.get("ALLOWED_HOSTS")))
 
 
 # Application definition
@@ -91,9 +89,6 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-
-if config.get("DATABASES"):
-    DATABASES = config.get("DATABASES")
 
 
 # Password validation
@@ -217,3 +212,7 @@ LOGGING = {
         }
     },
 }
+
+
+for key, item in config.items():
+    setattr(module, key, item)
